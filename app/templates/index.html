@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>At-Risk Screening</title>
+<style>
+  :root {
+    --bg: #F5F8F6;
+    --card: #FFFFFF;
+    --ink: #16231F;
+    --muted: #5C6B66;
+    --line: #DCE6E1;
+    --teal: #0E6E66;
+    --teal-dim: #E4F0EE;
+    --coral: #D8472F;
+    --coral-dim: #FBEAE6;
+    --focus: #1768B0;
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 48px 16px 80px;
+  }
+
+  main { width: 100%; max-width: 640px; }
+
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin: 0 0 8px;
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 14.5px;
+    line-height: 1.5;
+    margin: 0 0 32px;
+    max-width: 50ch;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 28px;
+  }
+
+  fieldset {
+    border: none;
+    padding: 0;
+    margin: 0 0 26px;
+  }
+
+  legend {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+    padding: 0;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 4px;
+  }
+
+  label.field {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--ink);
+  }
+
+  input[type="number"],
+  select {
+    width: 100%;
+    font-size: 15px;
+    font-family: inherit;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: #fff;
+    color: var(--ink);
+  }
+
+  input[type="number"]:focus,
+  select:focus,
+  .symptom input:focus-visible + span {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+
+  .symptom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+  }
+
+  .symptom {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    padding: 7px 0;
+    cursor: pointer;
+  }
+
+  .symptom input {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--teal);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  button.submit {
+    width: 100%;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: #fff;
+    background: var(--teal);
+    border: none;
+    border-radius: 9px;
+    padding: 13px 0;
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+
+  button.submit:hover { background: #0B5950; }
+  button.submit:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  button.submit:disabled { background: #9BB0AC; cursor: progress; }
+
+  /* ---- result panel ---- */
+  #result {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    display: none;
+  }
+
+  #result.show {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    animation: rise 260ms ease-out;
+  }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .gauge-wrap { position: relative; width: 132px; height: 132px; flex-shrink: 0; }
+
+  .gauge-wrap svg { transform: rotate(-90deg); }
+
+  .gauge-track { fill: none; stroke: var(--line); stroke-width: 11; }
+  .gauge-fill {
+    fill: none;
+    stroke-width: 11;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 600ms cubic-bezier(.4,0,.2,1), stroke 300ms ease;
+  }
+
+  .gauge-pct {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 800;
+  }
+
+  .result-text .label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 6px;
+  }
+
+  .result-text .verdict {
+    font-size: 21px;
+    font-weight: 800;
+    margin: 0 0 6px;
+  }
+
+  .result-text .detail {
+    font-size: 13.5px;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .verdict.at_risk { color: var(--coral); }
+  .verdict.not_at_risk { color: var(--teal); }
+
+  #error {
+    display: none;
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-radius: 9px;
+    background: var(--coral-dim);
+    color: var(--coral);
+    font-size: 13.5px;
+  }
+  #error.show { display: block; }
+
+  @media (max-width: 480px) {
+    .row, .symptom-grid { grid-template-columns: 1fr; }
+    #result.show { flex-direction: column; text-align: center; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #result.show { animation: none; }
+    .gauge-fill { transition: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Screening tool</p>
+  <h1>At-risk symptom check</h1>
+  <p class="subtitle">
+    Enter age, gender, and any symptoms present. The model returns a
+    probability estimate, not a diagnosis.
+  </p>
+
+  <div class="card">
+    <form id="predict-form">
+      <fieldset>
+        <legend>Patient</legend>
+        <div class="row">
+          <div>
+            <label class="field" for="age">Age</label>
+            <input type="number" id="age" name="age" min="0" max="120" value="45" required />
+          </div>
+          <div>
+            <label class="field" for="gender">Gender</label>
+            <select id="gender" name="gender">
+              <option value="Female">Female</option>
+              <option value="Male">Male</option>
+            </select>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Symptoms present</legend>
+        <div class="symptom-grid" id="symptom-grid"></div>
+      </fieldset>
+
+      <button type="submit" class="submit" id="submit-btn">Check risk</button>
+    </form>
+
+    <div id="error" role="alert"></div>
+
+    <div id="result" aria-live="polite">
+      <div class="gauge-wrap">
+        <svg width="132" height="132" viewBox="0 0 132 132">
+          <circle class="gauge-track" cx="66" cy="66" r="54" />
+          <circle class="gauge-fill" id="gauge-fill" cx="66" cy="66" r="54" />
+        </svg>
+        <div class="gauge-pct" id="gauge-pct">0%</div>
+      </div>
+      <div class="result-text">
+        <p class="label">Probability of at_risk</p>
+        <p class="verdict" id="verdict"></p>
+        <p class="detail" id="detail"></p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  const SYMPTOMS = [
+    ["chest_pain", "Chest pain"],
+    ["high_blood_pressure", "High blood pressure"],
+    ["irregular_heartbeat", "Irregular heartbeat"],
+    ["shortness_of_breath", "Shortness of breath"],
+    ["fatigue_weakness", "Fatigue / weakness"],
+    ["dizziness", "Dizziness"],
+    ["swelling_edema", "Swelling / edema"],
+    ["neck_jaw_pain", "Neck or jaw pain"],
+    ["excessive_sweating", "Excessive sweating"],
+    ["persistent_cough", "Persistent cough"],
+    ["nausea_vomiting", "Nausea / vomiting"],
+    ["chest_discomfort", "Chest discomfort"],
+    ["cold_hands_feet", "Cold hands / feet"],
+    ["snoring_sleep_apnea", "Snoring / sleep apnea"],
+    ["anxiety_doom", "Sense of anxiety / doom"],
+  ];
+
+  const grid = document.getElementById("symptom-grid");
+  for (const [key, displayLabel] of SYMPTOMS) {
+    const wrap = document.createElement("label");
+    wrap.className = "symptom";
+    wrap.innerHTML = `<input type="checkbox" name="${key}" /><span>${displayLabel}</span>`;
+    grid.appendChild(wrap);
+  }
+
+  const form = document.getElementById("predict-form");
+  const submitBtn = document.getElementById("submit-btn");
+  const resultEl = document.getElementById("result");
+  const errorEl = document.getElementById("error");
+  const gaugeFill = document.getElementById("gauge-fill");
+  const gaugePct = document.getElementById("gauge-pct");
+  const verdictEl = document.getElementById("verdict");
+  const detailEl = document.getElementById("detail");
+
+  const RADIUS = 54;
+  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+  gaugeFill.style.strokeDasharray = `${CIRCUMFERENCE}`;
+  gaugeFill.style.strokeDashoffset = `${CIRCUMFERENCE}`;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    errorEl.classList.remove("show");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Checking…";
+
+    const payload = {
+      age: Number(document.getElementById("age").value),
+      gender: document.getElementById("gender").value,
+    };
+    for (const [key] of SYMPTOMS) {
+      payload[key] = form.elements[key].checked ? 1 : 0;
+    }
+
+    try {
+      const res = await fetch("/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail ? JSON.stringify(body.detail) : `Request failed (${res.status})`);
+      }
+      const data = await res.json();
+      renderResult(data);
+    } catch (err) {
+      errorEl.textContent = "Couldn't get a prediction: " + err.message;
+      errorEl.classList.add("show");
+      resultEl.classList.remove("show");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Check risk";
+    }
+  });
+
+  function renderResult(data) {
+    const pct = Math.round(data.probability * 100);
+    const offset = CIRCUMFERENCE * (1 - data.probability);
+    const isAtRisk = data.prediction === "at_risk";
+
+    gaugeFill.style.stroke = isAtRisk ? "var(--coral)" : "var(--teal)";
+    // force reflow so the transition replays on repeated submits
+    gaugeFill.getBoundingClientRect();
+    gaugeFill.style.strokeDashoffset = `${offset}`;
+
+    gaugePct.textContent = `${pct}%`;
+    verdictEl.textContent = isAtRisk ? "At risk" : "Not at risk";
+    verdictEl.className = "verdict " + data.prediction;
+    detailEl.textContent = isAtRisk
+      ? "Model flags this combination of inputs as at risk."
+      : "Model does not flag this combination of inputs as at risk.";
+
+    resultEl.classList.add("show");
+  }
+</script>
+</body>
+</html>

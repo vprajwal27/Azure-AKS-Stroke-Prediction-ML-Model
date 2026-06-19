@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stroke-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: aks-stroke-app
+  template:
+    metadata:
+      labels:
+        app: aks-stroke-app
+    spec:
+      containers:
+        - name: aks-stroke-container
+          image: <ACR_NAME>.azurecr.io/at-risk-api:v1   # fill in after push
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 20
