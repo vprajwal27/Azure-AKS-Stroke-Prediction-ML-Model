@@ -1,7 +1,7 @@
 
 resource "azurerm_resource_group" "aks_rg" {
   name     = "at-risk-${var.environment}-rg"
-  location = "East US" 
+  location = "Canada Central" 
 
   tags = {
     environment = var.environment
