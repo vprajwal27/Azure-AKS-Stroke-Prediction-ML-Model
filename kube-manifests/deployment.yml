@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: aks-stroke-container
-          image: <ACR_NAME>.azurecr.io/at-risk-api:v1   # fill in after push
+          image: strokeacrj20${var.environment}.azurecr.io/at-risk-api:v1   
           ports:
             - containerPort: 8000
           readinessProbe:
