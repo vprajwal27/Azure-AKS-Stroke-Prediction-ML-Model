@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: stroke-deployment
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: aks-stroke-app
@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: aks-stroke-container
-          image: strokeacrj20${var.environment}.azurecr.io/at-risk-api:v1   
+          image: strokeacrj20staging.azurecr.io/at-risk-api:v1   
           ports:
             - containerPort: 8000
           readinessProbe:
