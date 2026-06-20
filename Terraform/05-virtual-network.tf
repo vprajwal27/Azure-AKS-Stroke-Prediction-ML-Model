@@ -7,7 +7,7 @@ resource "azurerm_virtual_network" "aks_vnet" {
   name                = "${var.environment}-vnet"
   location            = azurerm_resource_group.aks_rg.location
   resource_group_name = azurerm_resource_group.aks_rg.name
-  address_space       = ["10.0.0.0/16"] # <-- VNet range
+  address_space       = ["10.0.0.0/16"] 
 }
 
 resource "azurerm_subnet" "aks_subnet" {
