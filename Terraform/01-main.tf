@@ -11,7 +11,7 @@ terraform {
 
   backend "azurerm" {
     resource_group_name  = "tfstate-rg"
-    storage_account_name = "stroke-pvk-j20"      
+    storage_account_name = "strokepvkj20"      
     container_name       = "tfstate"
     key                  = "at-risk-api.tfstate"
    }
