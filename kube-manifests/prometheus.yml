@@ -2,13 +2,17 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: stroke-servicemonitor
+  namespace: monitoring
   labels:
-    release: kube-prometheus-stack   # Should match the heml chart's release name
+    release: kube-prometheus-stack
 spec:
+  namespaceSelector:
+    matchNames:
+      - default
   selector:
     matchLabels:
-      app: aks-stroke-app            
+      app: aks-stroke-app
   endpoints:
-    - port: http                    
+    - port: http
       path: /metrics
       interval: 15s
