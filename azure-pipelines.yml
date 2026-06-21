@@ -1,0 +1,209 @@
+# =============================================================================
+# Azure DevOps pipeline:
+#   Stage 1 Infra_Staging   -> terraform apply (staging workspace)
+#   Stage 2 Build           -> az acr build, push to staging ACR
+#   Stage 3 Deploy_Staging  -> helm + kubectl deploy to staging
+#   Stage 4 Deploy_Prod     -> GATED by manual approval; full prod stack
+
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  azureServiceConnection: 'arm-svc-connection'
+  terraformWorkingDir: 'Terraform'
+  imageRepository: 'at-risk-api'
+  imageTag: '$(Build.BuildId)'
+
+stages: #Infra Stage
+- stage: Infra_Staging
+  displayName: 'Terraform - staging infra'
+  variables:
+    environment: 'staging'
+  jobs:
+    - job: terraform
+      steps:
+        - task: TerraformInstaller@1
+          displayName: 'Install Terraform'
+          inputs:
+            terraformVersion: 'latest'
+
+        - task: TerraformTaskV4@4
+          displayName: 'terraform init'
+          inputs:
+            provider: 'azurerm'
+            command: 'init'
+            workingDirectory: '$(terraformWorkingDir)'
+            backendServiceArm: '$(azureServiceConnection)'
+            backendAzureRmResourceGroupName: 'tfstate-rg'
+            backendAzureRmStorageAccountName: 'strokepvkj20'
+            backendAzureRmContainerName: 'tfstate'
+            backendAzureRmKey: 'at-risk-api.tfstate'
+
+        
+        - task: TerraformTaskV4@4
+          displayName: 'terraform workspace + apply (staging)'
+          inputs:
+            provider: 'azurerm'
+            command: 'apply'
+            workingDirectory: '$(terraformWorkingDir)'
+            environmentServiceNameAzureRM: '$(azureServiceConnection)'
+            commandOptions: '-var="environment=staging" -auto-approve'
+
+- stage: Build                                      # Build docker image and push to ACR
+  displayName: 'Build & push image'
+  dependsOn: Infra_Staging
+  condition: succeeded()
+  variables:
+    acrName: 'strokeacrj20staging'
+  jobs:
+    - job: build
+      steps:
+        - task: AzureCLI@2
+          displayName: 'az acr build'
+          inputs:
+            azureSubscription: '$(azureServiceConnection)'
+            scriptType: 'bash'
+            scriptLocation: 'inlineScript'
+            inlineScript: |
+              az acr build \
+                --registry $(acrName) \
+                --image $(imageRepository):$(imageTag) \
+                --platform linux/amd64 \
+                .
+
+- stage: Deploy_Staging                       #Deploy to AKS Cluster
+  displayName: 'Deploy to staging'
+  dependsOn: Build
+  condition: succeeded()
+  variables:
+    environment: 'staging'
+    acrName: 'strokeacrj20staging'
+    resourceGroup: 'at-risk-staging-rg'
+    aksCluster: 'staging-aks'
+  jobs:
+    - job: deploy
+      steps:
+        - task: AzureCLI@2
+          displayName: 'Helm + kubectl deploy'
+          inputs:
+            azureSubscription: '$(azureServiceConnection)'
+            scriptType: 'bash'
+            scriptLocation: 'inlineScript'
+            inlineScript: |
+              set -e
+              az aks get-credentials --resource-group $(resourceGroup) --name $(aksCluster) --overwrite-existing
+              az aks install-cli || true
+
+              helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+              helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+              helm repo update
+
+              helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+                --namespace ingress-nginx --create-namespace --wait --timeout 5m
+
+              helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+                --namespace monitoring --create-namespace --wait --timeout 10m
+
+              ACR_LOGIN_SERVER=$(az acr show --name $(acrName) --query loginServer -o tsv)
+              FULL_IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$(imageTag)"
+              echo "Deploying image: $FULL_IMAGE"
+              sed -i "s#image:.*#image: $FULL_IMAGE#" kube-manifests/deployment.yml
+
+              kubectl apply -f kube-manifests/deployment.yml
+              kubectl apply -f kube-manifests/ClusterIP-service.yml
+              kubectl apply -f kube-manifests/Ingress.yml
+              kubectl apply -f kube-manifests/prometheus.yml
+              kubectl rollout status deployment/stroke-deployment --timeout=180s
+
+# STAGE 4: Deploy to PRODUCTION  (GATED by manual approval)
+
+- stage: Deploy_Prod
+  displayName: 'Promote to production (approval required)'
+  dependsOn: Deploy_Staging
+  condition: succeeded()
+  variables:
+    environment: 'prod'
+    acrName: 'strokeacrj20prod'
+    resourceGroup: 'at-risk-prod-rg'
+    aksCluster: 'prod-aks'
+  jobs:
+    - deployment: deploy_prod
+      displayName: 'Provision + deploy prod'
+      environment: 'production'   # <-- approval gate attached to this environment
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - checkout: self
+
+              # provision prod infra in its own workspace
+              - task: TerraformInstaller@1
+                inputs:
+                  terraformVersion: 'latest'
+
+              - task: TerraformTaskV4@4
+                displayName: 'terraform init'
+                inputs:
+                  provider: 'azurerm'
+                  command: 'init'
+                  workingDirectory: '$(terraformWorkingDir)'
+                  backendServiceArm: '$(azureServiceConnection)'
+                  backendAzureRmResourceGroupName: 'tfstate-rg'
+                  backendAzureRmStorageAccountName: 'strokepvkj20'
+                  backendAzureRmContainerName: 'tfstate'
+                  backendAzureRmKey: 'at-risk-api.tfstate'
+
+              - task: TerraformTaskV4@4
+                displayName: 'terraform apply (prod)'
+                inputs:
+                  provider: 'azurerm'
+                  command: 'apply'
+                  workingDirectory: '$(terraformWorkingDir)'
+                  environmentServiceNameAzureRM: '$(azureServiceConnection)'
+                  commandOptions: '-var="environment=prod" -auto-approve'
+
+              # build/push image into prod ACR
+              - task: AzureCLI@2
+                displayName: 'az acr build (prod)'
+                inputs:
+                  azureSubscription: '$(azureServiceConnection)'
+                  scriptType: 'bash'
+                  scriptLocation: 'inlineScript'
+                  inlineScript: |
+                    az acr build --registry $(acrName) --image $(imageRepository):$(imageTag) --platform linux/amd64 .
+
+              # deploy to prod cluster
+              - task: AzureCLI@2
+                displayName: 'Helm + kubectl deploy (prod)'
+                inputs:
+                  azureSubscription: '$(azureServiceConnection)'
+                  scriptType: 'bash'
+                  scriptLocation: 'inlineScript'
+                  inlineScript: |
+                    set -e
+                    az aks get-credentials --resource-group $(resourceGroup) --name $(aksCluster) --overwrite-existing
+                    az aks install-cli || true
+
+                    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+                    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+                    helm repo update
+
+                    helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+                      --namespace ingress-nginx --create-namespace --wait --timeout 5m
+                    helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+                      --namespace monitoring --create-namespace --wait --timeout 10m
+
+                    ACR_LOGIN_SERVER=$(az acr show --name $(acrName) --query loginServer -o tsv)
+                    FULL_IMAGE="$ACR_LOGIN_SERVER/$(imageRepository):$(imageTag)"
+                    sed -i "s#image:.*#image: $FULL_IMAGE#" kube-manifests/deployment.yml
+
+                    kubectl apply -f kube-manifests/deployment.yml
+                    kubectl apply -f kube-manifests/ClusterIP-service.yml
+                    kubectl apply -f kube-manifests/Ingress.yml
+                    kubectl apply -f kube-manifests/prometheus.yml
+                    kubectl rollout status deployment/stroke-deployment --timeout=180s
