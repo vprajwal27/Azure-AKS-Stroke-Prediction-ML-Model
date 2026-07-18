@@ -1,7 +1,6 @@
 FROM python:3.12-slim
 
-# LightGBM's compiled extension (lib_lightgbm.so) is dynamically linked
-# against libgomp at runtime. python:3.12-slim will not include it by default
+
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libgomp1 \
@@ -9,8 +8,6 @@ RUN apt-get update \
 
 WORKDIR /code
 
-# Copy and install dependencies first so Docker can cache this layer
-# and skip reinstalling everything when only app code changes.
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
